@@ -303,11 +303,26 @@ impl Game {
 
     fn draw(&self) {
         clear_background(Color::new(0.55, 0.78, 0.95, 1.0));
+        set_default_camera();
+        let sw = screen_width();
+        let sh = screen_height();
+        let bands = 24;
+        for i in 0..bands {
+            let t = i as f32 / bands as f32;
+            draw_rectangle(
+                0.0,
+                t * sh,
+                sw,
+                sh / bands as f32 + 1.0,
+                Color::new(0.05 + 0.75 * t, 0.02 + 0.2 * t, 0.2 + 0.4 * t, 1.0),
+            );
+        }
 
         let cam = Camera3D {
-            position: vec3(self.x * 0.6, 4.4, self.z + 7.5),
-            target: vec3(self.x * 0.6, 1.3, self.z - 9.0),
-            up: vec3(0.0, 1.0, 0.0),
+            position: vec3(self.x * 0.55, 4.0 + self.y * 0.35, self.z + 6.5),
+            target: vec3(self.x * 0.45, 1.6 + self.y * 0.25, self.z - 10.0),
+            up: vec3((lane_x(self.lane) - self.x) * 0.03, 1.0, 0.0),
+            fovy: 55.0f32.to_radians(),
             ..Default::default()
         };
         set_camera(&cam);
@@ -328,7 +343,7 @@ impl Game {
             vec3(0.0, -0.25, self.z - 50.0),
             vec3(road_w, 0.5, 200.0),
             None,
-            Color::new(0.28, 0.28, 0.32, 1.0),
+            Color::new(0.1, 0.1, 0.16, 1.0),
         );
         // listras para dar sensação de movimento
         let base = (self.z / 4.0).floor() * 4.0;
@@ -336,9 +351,9 @@ impl Game {
             let zz = base - i as f32 * 4.0;
             let idx = (zz / 4.0) as i32;
             let c = if idx.rem_euclid(2) == 0 {
-                Color::new(0.33, 0.33, 0.38, 1.0)
+                Color::new(0.16, 0.14, 0.24, 1.0)
             } else {
-                Color::new(0.26, 0.26, 0.30, 1.0)
+                Color::new(0.12, 0.11, 0.19, 1.0)
             };
             draw_cube(vec3(0.0, 0.01, zz), vec3(road_w, 0.02, 3.9), None, c);
         }
@@ -348,7 +363,7 @@ impl Game {
                 vec3(sx, 0.03, self.z - 50.0),
                 vec3(0.08, 0.02, 200.0),
                 None,
-                Color::new(0.9, 0.9, 0.9, 1.0),
+                Color::new(0.2, 0.95, 1.0, 1.0),
             );
         }
         // calçadas
@@ -357,12 +372,12 @@ impl Game {
                 vec3(sx, 0.1, self.z - 50.0),
                 vec3(3.0, 0.2, 200.0),
                 None,
-                Color::new(0.55, 0.55, 0.5, 1.0),
+                Color::new(0.2, 0.18, 0.3, 1.0),
             );
         }
         // prédios dos lados
         let base_i = (self.z / 6.0).floor() as i32;
-        for i in -4..30 {
+        for i in -4..24 {
             let idx = base_i - i;
             let zz = idx as f32 * 6.0;
             for (side, sx) in [(0, -10.0f32), (1, 10.0f32)] {
@@ -373,8 +388,25 @@ impl Game {
                     vec3(sx, h / 2.0, zz),
                     vec3(5.0, h, 5.2),
                     None,
-                    Color::new(0.55 + tint, 0.45 + tint, 0.42, 1.0),
+                    Color::new(0.12 + tint, 0.1 + tint * 0.5, 0.25 + tint, 1.0),
                 );
+                let fx = if side == 0 { sx + 2.52 } else { sx - 2.52 };
+                for wy in (1..h as i32).step_by(2) {
+                    for wz in -1..=1 {
+                        let lit = (seed + wy * 3 + wz * 5).rem_euclid(3) != 0;
+                        let col = if lit {
+                            Color::new(1.0, 0.9, 0.5, 1.0)
+                        } else {
+                            Color::new(0.2, 0.25, 0.4, 1.0)
+                        };
+                        draw_cube(
+                            vec3(fx, wy as f32 + 0.5, zz + wz as f32 * 1.5),
+                            vec3(0.05, 1.0, 0.9),
+                            None,
+                            col,
+                        );
+                    }
+                }
             }
         }
     }
@@ -384,8 +416,8 @@ impl Game {
             let x = lane_x(o.lane);
             match o.kind {
                 Kind::Low => {
-                    draw_cube(vec3(x, 0.5, o.z), vec3(1.8, 1.0, 0.8), None, ORANGE);
-                    draw_cube(vec3(x, 0.75, o.z), vec3(1.82, 0.25, 0.82), None, WHITE);
+                    draw_cube(vec3(x, 0.5, o.z), vec3(1.8, 1.0, 0.8), None, Color::new(1.0, 0.25, 0.7, 1.0));
+                    draw_cube(vec3(x, 0.75, o.z), vec3(1.82, 0.25, 0.82), None, Color::new(0.2, 0.95, 1.0, 1.0));
                     draw_cube_wires(vec3(x, 0.5, o.z), vec3(1.8, 1.0, 0.8), BLACK);
                 }
                 Kind::High => {
@@ -396,8 +428,16 @@ impl Game {
                 }
                 Kind::Train => {
                     let len = o.len();
-                    draw_cube(vec3(x, 1.5, o.z), vec3(1.9, 3.0, len), None, Color::new(0.2, 0.4, 0.8, 1.0));
+                    draw_cube(vec3(x, 1.5, o.z), vec3(1.9, 3.0, len), None, Color::new(0.45, 0.2, 0.85, 1.0));
                     draw_cube(vec3(x, 3.02, o.z), vec3(1.7, 0.1, len - 0.4), None, LIGHTGRAY);
+                    draw_cube(vec3(x, 0.6, o.z), vec3(1.93, 0.3, len), None, YELLOW);
+                    for k in 0..4 {
+                        let wz = o.z - len / 2.0 + 1.2 + k as f32 * 2.2;
+                        draw_cube(vec3(x - 0.96, 2.0, wz), vec3(0.04, 0.8, 1.2), None, SKYBLUE);
+                        draw_cube(vec3(x + 0.96, 2.0, wz), vec3(0.04, 0.8, 1.2), None, SKYBLUE);
+                    }
+                    draw_cube(vec3(x - 0.6, 0.9, o.z + len / 2.0 + 0.02), vec3(0.3, 0.3, 0.05), None, Color::new(1.0, 1.0, 0.7, 1.0));
+                    draw_cube(vec3(x + 0.6, 0.9, o.z + len / 2.0 + 0.02), vec3(0.3, 0.3, 0.05), None, Color::new(1.0, 1.0, 0.7, 1.0));
                     draw_cube(vec3(x, 1.7, o.z + len / 2.0 - 0.02), vec3(1.2, 1.0, 0.05), None, Color::new(0.8, 0.9, 1.0, 1.0));
                     draw_cube_wires(vec3(x, 1.5, o.z), vec3(1.9, 3.0, len), BLACK);
                 }
@@ -411,6 +451,7 @@ impl Game {
             let x = lane_x(c.lane);
             let w = 0.12 + 0.35 * spin.sin().abs();
             draw_cube(vec3(x, c.y, c.z), vec3(w, 0.5, 0.5), None, GOLD);
+            draw_cube(vec3(x, c.y, c.z), vec3(w * 1.1, 0.3, 0.3), None, YELLOW);
         }
     }
 
@@ -420,8 +461,8 @@ impl Game {
         // sombra
         draw_cube(vec3(x, 0.03, z), vec3(0.9, 0.02, 0.9), None, Color::new(0.0, 0.0, 0.0, 0.5));
 
-        let body = Color::new(0.1, 0.7, 0.65, 1.0);
-        let accent = Color::new(1.0, 0.8, 0.2, 1.0);
+        let body = Color::new(0.75, 0.78, 0.85, 1.0);
+        let accent = Color::new(0.2, 0.95, 1.0, 1.0);
 
         if self.roll_t > 0.0 {
             // rolando: bolinha compacta
@@ -430,21 +471,27 @@ impl Game {
             return;
         }
 
-        let swing = (self.run_t * 2.0).sin() * 0.35;
         let in_air = self.y > 0.01;
-        let s = if in_air { 0.0 } else { swing };
+        let swing = (self.run_t * 2.0).sin() * 0.4;
+        let s = if in_air { 0.3 } else { swing };
+        let bob = if in_air { 0.0 } else { (self.run_t * 4.0).sin().abs() * 0.06 };
+        let lean = (lane_x(self.lane) - self.x) * 0.18;
+        let by = self.y + bob;
+        let arm = if in_air { 0.25 } else { 0.0 };
         // pernas
-        draw_cube(vec3(x - 0.17, self.y + 0.4, z + s), vec3(0.22, 0.8, 0.25), None, DARKBLUE);
-        draw_cube(vec3(x + 0.17, self.y + 0.4, z - s), vec3(0.22, 0.8, 0.25), None, DARKBLUE);
+        draw_cube(vec3(x - 0.17, by + 0.4, z + s), vec3(0.22, 0.8, 0.25), None, DARKBLUE);
+        draw_cube(vec3(x + 0.17, by + 0.4, z - s), vec3(0.22, 0.8, 0.25), None, DARKBLUE);
         // tronco
-        draw_cube(vec3(x, self.y + 1.1, z), vec3(0.7, 0.8, 0.4), None, body);
-        draw_cube(vec3(x, self.y + 1.2, z - 0.21), vec3(0.4, 0.15, 0.03), None, accent);
+        draw_cube(vec3(x + lean * 0.5, by + 1.1, z), vec3(0.7, 0.8, 0.4), None, body);
+        draw_cube(vec3(x + lean * 0.5, by + 1.2, z - 0.21), vec3(0.4, 0.15, 0.03), None, accent);
         // braços
-        draw_cube(vec3(x - 0.45, self.y + 1.1, z - s), vec3(0.18, 0.7, 0.2), None, body);
-        draw_cube(vec3(x + 0.45, self.y + 1.1, z + s), vec3(0.18, 0.7, 0.2), None, body);
-        // cabeça + boné
-        draw_sphere(vec3(x, self.y + 1.65, z), 0.27, None, Color::new(0.95, 0.8, 0.65, 1.0));
-        draw_cube(vec3(x, self.y + 1.85, z), vec3(0.6, 0.12, 0.6), None, accent);
+        draw_cube(vec3(x - 0.45 + lean * 0.5, by + 1.1 + arm, z - s), vec3(0.18, 0.7, 0.2), None, body);
+        draw_cube(vec3(x + 0.45 + lean * 0.5, by + 1.1 + arm, z + s), vec3(0.18, 0.7, 0.2), None, body);
+        // cabeça
+        draw_cube(vec3(x + lean, by + 1.65, z), vec3(0.55, 0.45, 0.45), None, Color::new(0.55, 0.58, 0.65, 1.0));
+        draw_cube(vec3(x + lean, by + 1.68, z - 0.23), vec3(0.4, 0.14, 0.03), None, accent);
+        draw_cube(vec3(x + lean, by + 1.98, z), vec3(0.05, 0.25, 0.05), None, GRAY);
+        draw_sphere(vec3(x + lean, by + 2.12, z), 0.07, None, accent);
     }
 
     fn draw_hud(&self) {
@@ -471,7 +518,7 @@ impl Game {
 
 fn conf() -> Conf {
     Conf {
-        window_title: "Runner 3D".to_owned(),
+        window_title: "Neon Dash".to_owned(),
         window_width: 480,
         window_height: 800,
         high_dpi: true,
